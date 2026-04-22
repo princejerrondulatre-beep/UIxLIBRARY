@@ -1,5 +1,5 @@
 --[[
-    NeXus UI Library
+    NeXus UI Library - Fixed Version
     Features: Window, Tabs, Slider, Input, Button, Toggle, Copy Clipboard,
     Notification, Keybind, Color Picker, Dropdown, Floating Button, Key System,
     10 Themes, Smooth Animations
@@ -224,32 +224,10 @@ function Library:CopyToClipboard(Text)
     end
 end
 
--- Color Picker (HSV wheel + sliders)
-function Library:CreateColorPicker(Parent, DefaultColor, Callback)
-    local ColorPickerFrame = Create("Frame", {
-        Parent = Parent,
-        BackgroundColor3 = CurrentTheme.Main,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 200, 0, 200),
-        Visible = false,
-        ZIndex = 10
-    })
-    -- Implementation would include color wheel and sliders
-    -- For brevity, simplified: returns a basic color picker with RGB sliders
-    -- (Full implementation available in extended version)
-    return {
-        SetColor = function(self, Color)
-            -- Update color
-            if Callback then Callback(Color) end
-        end,
-        GetColor = function()
-            return Color3.new(1, 0, 0)
-        end
-    }
-end
-
 -- Main Window Creation
 local FloatingButton
+local MainFrames = {} -- Store all created windows
+
 function Library:CreateWindow(Title)
     -- Create main GUI if not exists
     local MainFrame = Create("Frame", {
@@ -267,6 +245,8 @@ function Library:CreateWindow(Title)
         Color = CurrentTheme.Outline,
         Thickness = 2
     })
+    
+    table.insert(MainFrames, MainFrame)
     
     -- Title bar
     local TitleBar = Create("Frame", {
@@ -358,22 +338,18 @@ function Library:CreateWindow(Title)
         end
     end)
     
-    -- Floating Button
-    function Library:CreateFloatingButton(Properties)
-        Properties = Properties or {}
-        local Text = Properties.Text or "NeXus"
-        local Image = Properties.Image or nil
-        local Callback = Properties.Callback or function() MainFrame.Visible = not MainFrame.Visible end
-        
+    -- Floating Button (only create once)
+    if not FloatingButton then
         FloatingButton = Create("ImageButton", {
             Parent = ScreenGui,
             BackgroundColor3 = CurrentTheme.Accent,
             BorderSizePixel = 0,
             Position = UDim2.new(0, 20, 0.5, -25),
             Size = UDim2.new(0, 50, 0, 50),
-            Image = Image or "",
+            Image = "",
             ImageColor3 = CurrentTheme.Text,
-            AutoButtonColor = false
+            AutoButtonColor = false,
+            Visible = true
         })
         Create("UICorner", {Parent = FloatingButton, CornerRadius = UDim.new(0, 8)})
         Create("UIStroke", {
@@ -387,12 +363,16 @@ function Library:CreateWindow(Title)
             BackgroundTransparency = 1,
             Size = UDim2.new(1, 0, 1, 0),
             Font = Enum.Font.GothamBold,
-            Text = Text,
+            Text = "NX",
             TextColor3 = CurrentTheme.Text,
             TextSize = 16
         })
         
-        FloatingButton.MouseButton1Click:Connect(Callback)
+        FloatingButton.MouseButton1Click:Connect(function()
+            for _, frame in ipairs(MainFrames) do
+                frame.Visible = not frame.Visible
+            end
+        end)
         
         -- Draggable floating button
         local btnDragging, btnStart, btnStartPos
@@ -414,8 +394,6 @@ function Library:CreateWindow(Title)
                 FloatingButton.Position = UDim2.new(btnStartPos.X.Scale, btnStartPos.X.Offset + delta.X, btnStartPos.Y.Scale, btnStartPos.Y.Offset + delta.Y)
             end
         end)
-        
-        return FloatingButton
     end
     
     -- Tab creation
@@ -894,7 +872,6 @@ function Library:CreateWindow(Title)
         end
         
         function Tab:AddColorPicker(Name, DefaultColor, Callback)
-            -- Simplified color picker (full version would have HSV wheel)
             local PickerFrame = Create("Frame", {
                 Parent = Page,
                 BackgroundColor3 = CurrentTheme.Element,
@@ -957,21 +934,17 @@ function Library:CreateWindow(Title)
         return Tab
     end
     
-    -- Theme setter
-    function Library:SetTheme(ThemeName)
-        if Themes[ThemeName] then
-            CurrentTheme = Themes[ThemeName]
-            -- Update all UI elements (simplified)
-            Library:Notification("Theme", "Theme set to " .. ThemeName, 2)
-        end
-    end
-    
-    -- Set default floating button
-    Library:CreateFloatingButton({Text = "NX", Callback = function()
-        MainFrame.Visible = not MainFrame.Visible
-    end})
-    
     return Library
+end
+
+-- Theme setter (Fixed)
+function Library:SetTheme(ThemeName)
+    if Themes[ThemeName] then
+        CurrentTheme = Themes[ThemeName]
+        Library:Notification("Theme", "Theme set to " .. ThemeName, 2)
+    else
+        Library:Notification("Theme Error", "Theme '" .. ThemeName .. "' not found.", 2)
+    end
 end
 
 -- Key System Entry
