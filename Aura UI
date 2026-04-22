@@ -1,0 +1,875 @@
+--[[
+    Simple UI Library
+    Features: Window, Slider, Input, Button, Toggle, Copy Button, Notification,
+              Keybind, Color Picker, Dropdown, Floating Toggle Button, Key System
+]]
+
+local Library = {}
+Library.Flags = {}
+Library.Connections = {}
+Library.Theme = {
+    Background = Color3.fromRGB(30, 30, 30),
+    Accent = Color3.fromRGB(0, 170, 255),
+    Text = Color3.fromRGB(255, 255, 255),
+    SubText = Color3.fromRGB(200, 200, 200),
+    ElementBg = Color3.fromRGB(40, 40, 40)
+}
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Utility: Create rounded corners
+local function applyRounded(gui, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius or 6)
+    corner.Parent = gui
+end
+
+-- Utility: Notifications
+local NotificationGui
+local function setupNotifications()
+    if NotificationGui then return end
+    NotificationGui = Instance.new("ScreenGui")
+    NotificationGui.Name = "Notifications"
+    NotificationGui.ResetOnSpawn = false
+    NotificationGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    NotificationGui.Parent = game.CoreGui
+
+    local list = Instance.new("UIListLayout")
+    list.Padding = UDim.new(0, 5)
+    list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    list.SortOrder = Enum.SortOrder.LayoutOrder
+    list.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    list.Parent = NotificationGui
+end
+
+function Library:Notify(config)
+    setupNotifications()
+    local title = config.Title or "Notification"
+    local text = config.Text or ""
+    local duration = config.Duration or 3
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 250, 0, 60)
+    frame.Position = UDim2.new(1, -10, 1, -10)
+    frame.BackgroundColor3 = Library.Theme.Background
+    frame.BorderSizePixel = 0
+    frame.Parent = NotificationGui
+    applyRounded(frame)
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Text = title
+    titleLabel.Size = UDim2.new(1, -20, 0, 20)
+    titleLabel.Position = UDim2.new(0, 10, 0, 5)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.TextColor3 = Library.Theme.Text
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 14
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = frame
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Text = text
+    textLabel.Size = UDim2.new(1, -20, 0, 30)
+    textLabel.Position = UDim2.new(0, 10, 0, 25)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextColor3 = Library.Theme.SubText
+    textLabel.Font = Enum.Font.Gotham
+    textLabel.TextSize = 12
+    textLabel.TextXAlignment = Enum.TextXAlignment.Left
+    textLabel.TextWrapped = true
+    textLabel.Parent = frame
+
+    local tweenIn = TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Position = UDim2.new(1, -10, 1, -(frame.AbsoluteSize.Y + 10))})
+    tweenIn:Play()
+
+    delay(duration, function()
+        local tweenOut = TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+            {Position = UDim2.new(1, -10, 1, 10)})
+        tweenOut:Play()
+        tweenOut.Completed:Connect(function()
+            frame:Destroy()
+        end)
+    end)
+end
+
+-- Main Window
+function Library:CreateWindow(config)
+    config = config or {}
+    local name = config.Name or "My UI"
+    local keySystem = config.KeySystem or false
+    local keyUrl = config.KeyUrl or ""
+    local keyValid = false
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = name
+    gui.ResetOnSpawn = false
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.Parent = game.CoreGui
+
+    local main = Instance.new("Frame")
+    main.Size = UDim2.new(0, 550, 0, 450)
+    main.Position = UDim2.new(0.5, -275, 0.5, -225)
+    main.BackgroundColor3 = Library.Theme.Background
+    main.BorderSizePixel = 0
+    main.Parent = gui
+    applyRounded(main, 8)
+
+    -- Dragging
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1, 0, 0, 35)
+    titleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = main
+    applyRounded(titleBar, 8)
+    local titleCornerFix = Instance.new("Frame")
+    titleCornerFix.Size = UDim2.new(1, 0, 0, 8)
+    titleCornerFix.Position = UDim2.new(0, 0, 1, -8)
+    titleCornerFix.BackgroundColor3 = titleBar.BackgroundColor3
+    titleCornerFix.BorderSizePixel = 0
+    titleCornerFix.Parent = titleBar
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Text = name
+    titleLabel.Size = UDim2.new(1, -60, 1, 0)
+    titleLabel.Position = UDim2.new(0, 15, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.TextColor3 = Library.Theme.Text
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 16
+    titleLabel.Parent = titleBar
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Text = "✕"
+    closeBtn.Size = UDim2.new(0, 35, 1, 0)
+    closeBtn.Position = UDim2.new(1, -35, 0, 0)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    closeBtn.TextColor3 = Library.Theme.Text
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 18
+    closeBtn.Parent = titleBar
+    applyRounded(closeBtn, 8)
+    closeBtn.MouseButton1Click:Connect(function()
+        gui.Enabled = false
+    end)
+
+    local dragging, dragInput, dragStart, startPos
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = main.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    titleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+            local delta = input.Position - dragStart
+            main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    -- Content area
+    local content = Instance.new("ScrollingFrame")
+    content.Size = UDim2.new(1, -10, 1, -45)
+    content.Position = UDim2.new(0, 5, 0, 40)
+    content.BackgroundTransparency = 1
+    content.BorderSizePixel = 0
+    content.ScrollBarThickness = 4
+    content.ScrollBarImageColor3 = Library.Theme.Accent
+    content.CanvasSize = UDim2.new(0, 0, 0, 0)
+    content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    content.Parent = main
+
+    local uiList = Instance.new("UIListLayout")
+    uiList.Padding = UDim.new(0, 6)
+    uiList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    uiList.SortOrder = Enum.SortOrder.LayoutOrder
+    uiList.Parent = content
+
+    -- Key System overlay
+    local keyFrame
+    if keySystem then
+        keyFrame = Instance.new("Frame")
+        keyFrame.Size = UDim2.new(1, 0, 1, 0)
+        keyFrame.BackgroundColor3 = Library.Theme.Background
+        keyFrame.BorderSizePixel = 0
+        keyFrame.BackgroundTransparency = 0.2
+        keyFrame.Parent = main
+        applyRounded(keyFrame, 8)
+
+        local keyInner = Instance.new("Frame")
+        keyInner.Size = UDim2.new(0, 300, 0, 150)
+        keyInner.Position = UDim2.new(0.5, -150, 0.5, -75)
+        keyInner.BackgroundColor3 = Library.Theme.Background
+        keyInner.BorderSizePixel = 0
+        keyInner.Parent = keyFrame
+        applyRounded(keyInner, 8)
+
+        local keyTitle = Instance.new("TextLabel")
+        keyTitle.Text = "Key System"
+        keyTitle.Size = UDim2.new(1, 0, 0, 30)
+        keyTitle.BackgroundTransparency = 1
+        keyTitle.TextColor3 = Library.Theme.Text
+        keyTitle.Font = Enum.Font.GothamBold
+        keyTitle.TextSize = 18
+        keyTitle.Parent = keyInner
+
+        local keyInput = Instance.new("TextBox")
+        keyInput.Size = UDim2.new(1, -40, 0, 35)
+        keyInput.Position = UDim2.new(0, 20, 0, 40)
+        keyInput.PlaceholderText = "Enter key..."
+        keyInput.BackgroundColor3 = Library.Theme.ElementBg
+        keyInput.TextColor3 = Library.Theme.Text
+        keyInput.Font = Enum.Font.Gotham
+        keyInput.TextSize = 14
+        keyInput.BorderSizePixel = 0
+        keyInput.Parent = keyInner
+        applyRounded(keyInput, 4)
+
+        local keyBtn = Instance.new("TextButton")
+        keyBtn.Text = "Check Key"
+        keyBtn.Size = UDim2.new(1, -40, 0, 35)
+        keyBtn.Position = UDim2.new(0, 20, 0, 85)
+        keyBtn.BackgroundColor3 = Library.Theme.Accent
+        keyBtn.TextColor3 = Library.Theme.Text
+        keyBtn.Font = Enum.Font.GothamBold
+        keyBtn.TextSize = 14
+        keyBtn.BorderSizePixel = 0
+        keyBtn.Parent = keyInner
+        applyRounded(keyBtn, 4)
+
+        local keyStatus = Instance.new("TextLabel")
+        keyStatus.Size = UDim2.new(1, 0, 0, 20)
+        keyStatus.Position = UDim2.new(0, 20, 0, 125)
+        keyStatus.BackgroundTransparency = 1
+        keyStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
+        keyStatus.Font = Enum.Font.Gotham
+        keyStatus.TextSize = 12
+        keyStatus.Text = ""
+        keyStatus.Parent = keyInner
+
+        keyBtn.MouseButton1Click:Connect(function()
+            local enteredKey = keyInput.Text
+            if keyUrl ~= "" then
+                -- Simple key check (replace with actual HTTP request)
+                local success, result = pcall(function()
+                    return game:HttpGet(keyUrl .. "?key=" .. enteredKey)
+                end)
+                if success and result:lower():find("valid") then
+                    keyValid = true
+                    keyFrame:Destroy()
+                    Library:Notify({Title = "Key System", Text = "Key validated successfully!", Duration = 3})
+                else
+                    keyStatus.Text = "Invalid key!"
+                end
+            else
+                -- Whitelist check
+                local whitelist = config.Whitelist or {}
+                if table.find(whitelist, enteredKey) then
+                    keyValid = true
+                    keyFrame:Destroy()
+                    Library:Notify({Title = "Key System", Text = "Welcome!", Duration = 3})
+                else
+                    keyStatus.Text = "Invalid key!"
+                end
+            end
+        end)
+    end
+
+    local windowObj = {
+        Gui = gui,
+        Main = main,
+        Content = content,
+        Flags = {},
+        KeyValid = keyValid,
+        Theme = Library.Theme
+    }
+
+    -- Floating Toggle Button
+    function windowObj:CreateFloatingButton(config)
+        config = config or {}
+        local text = config.Text or "Toggle"
+        local image = config.Image or "" -- asset id or ""
+        local position = config.Position or UDim2.new(0, 20, 0, 20)
+
+        local floatBtn = Instance.new("TextButton")
+        floatBtn.Size = UDim2.new(0, 60, 0, 60)
+        floatBtn.Position = position
+        floatBtn.BackgroundColor3 = Library.Theme.Accent
+        floatBtn.Text = text
+        floatBtn.TextColor3 = Library.Theme.Text
+        floatBtn.Font = Enum.Font.GothamBold
+        floatBtn.TextSize = 16
+        floatBtn.BorderSizePixel = 0
+        floatBtn.Parent = gui
+        applyRounded(floatBtn, 30)
+
+        if image ~= "" then
+            local img = Instance.new("ImageLabel")
+            img.Size = UDim2.new(1, -10, 1, -10)
+            img.Position = UDim2.new(0, 5, 0, 5)
+            img.BackgroundTransparency = 1
+            img.Image = image
+            img.Parent = floatBtn
+        end
+
+        -- Make draggable
+        local drag, start, startPos
+        floatBtn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                drag = true
+                start = input.Position
+                startPos = floatBtn.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        drag = false
+                    end
+                end)
+            end
+        end)
+        floatBtn.InputChanged:Connect(function(input)
+            if drag and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local delta = input.Position - start
+                floatBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+
+        floatBtn.MouseButton1Click:Connect(function()
+            if not drag then
+                main.Visible = not main.Visible
+            end
+        end)
+
+        return floatBtn
+    end
+
+    -- Element Creators (attached to windowObj)
+    function windowObj:Slider(config)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, -20, 0, 45)
+        frame.BackgroundTransparency = 1
+        frame.Parent = content
+
+        local label = Instance.new("TextLabel")
+        label.Text = config.Name or "Slider"
+        label.Size = UDim2.new(1, -60, 0, 20)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Library.Theme.Text
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.Parent = frame
+
+        local valueLabel = Instance.new("TextLabel")
+        valueLabel.Size = UDim2.new(0, 50, 0, 20)
+        valueLabel.Position = UDim2.new(1, -50, 0, 0)
+        valueLabel.BackgroundTransparency = 1
+        valueLabel.TextColor3 = Library.Theme.SubText
+        valueLabel.Font = Enum.Font.Gotham
+        valueLabel.TextSize = 14
+        valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+        valueLabel.Parent = frame
+
+        local sliderFrame = Instance.new("Frame")
+        sliderFrame.Size = UDim2.new(1, 0, 0, 8)
+        sliderFrame.Position = UDim2.new(0, 0, 0, 25)
+        sliderFrame.BackgroundColor3 = Library.Theme.ElementBg
+        sliderFrame.BorderSizePixel = 0
+        sliderFrame.Parent = frame
+        applyRounded(sliderFrame, 4)
+
+        local fill = Instance.new("Frame")
+        fill.Size = UDim2.new(0, 0, 1, 0)
+        fill.BackgroundColor3 = Library.Theme.Accent
+        fill.BorderSizePixel = 0
+        fill.Parent = sliderFrame
+        applyRounded(fill, 4)
+
+        local knob = Instance.new("TextButton")
+        knob.Size = UDim2.new(0, 14, 0, 14)
+        knob.Position = UDim2.new(0, -7, 0.5, -7)
+        knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        knob.Text = ""
+        knob.BorderSizePixel = 0
+        knob.Parent = sliderFrame
+        applyRounded(knob, 7)
+
+        local minVal = config.Min or 0
+        local maxVal = config.Max or 100
+        local current = config.Default or minVal
+
+        local function setValue(val)
+            val = math.clamp(val, minVal, maxVal)
+            current = val
+            local percent = (val - minVal) / (maxVal - minVal)
+            fill.Size = UDim2.new(percent, 0, 1, 0)
+            valueLabel.Text = string.format("%.1f", val)
+            if config.Callback then
+                config.Callback(val)
+            end
+            windowObj.Flags[config.Flag or config.Name] = val
+        end
+
+        setValue(current)
+
+        local draggingSlider = false
+        knob.MouseButton1Down:Connect(function()
+            draggingSlider = true
+        end)
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                draggingSlider = false
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local mousePos = UserInputService:GetMouseLocation()
+                local relPos = mousePos - sliderFrame.AbsolutePosition
+                local percent = math.clamp(relPos.X / sliderFrame.AbsoluteSize.X, 0, 1)
+                setValue(minVal + percent * (maxVal - minVal))
+            end
+        end)
+    end
+
+    function windowObj:Input(config)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, -20, 0, 45)
+        frame.BackgroundTransparency = 1
+        frame.Parent = content
+
+        local label = Instance.new("TextLabel")
+        label.Text = config.Name or "Input"
+        label.Size = UDim2.new(1, 0, 0, 20)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Library.Theme.Text
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.Parent = frame
+
+        local textBox = Instance.new("TextBox")
+        textBox.Size = UDim2.new(1, 0, 0, 25)
+        textBox.Position = UDim2.new(0, 0, 0, 20)
+        textBox.BackgroundColor3 = Library.Theme.ElementBg
+        textBox.TextColor3 = Library.Theme.Text
+        textBox.PlaceholderText = config.Placeholder or ""
+        textBox.Text = config.Default or ""
+        textBox.Font = Enum.Font.Gotham
+        textBox.TextSize = 14
+        textBox.BorderSizePixel = 0
+        textBox.Parent = frame
+        applyRounded(textBox, 4)
+
+        textBox.FocusLost:Connect(function(enterPressed)
+            if config.Callback then
+                config.Callback(textBox.Text, enterPressed)
+            end
+            windowObj.Flags[config.Flag or config.Name] = textBox.Text
+        end)
+    end
+
+    function windowObj:Button(config)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -20, 0, 35)
+        btn.Text = config.Name or "Button"
+        btn.BackgroundColor3 = Library.Theme.Accent
+        btn.TextColor3 = Library.Theme.Text
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 14
+        btn.BorderSizePixel = 0
+        btn.Parent = content
+        applyRounded(btn, 4)
+
+        btn.MouseButton1Click:Connect(function()
+            if config.Callback then
+                config.Callback()
+            end
+        end)
+    end
+
+    function windowObj:Toggle(config)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, -20, 0, 35)
+        frame.BackgroundTransparency = 1
+        frame.Parent = content
+
+        local label = Instance.new("TextLabel")
+        label.Text = config.Name or "Toggle"
+        label.Size = UDim2.new(1, -40, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Library.Theme.Text
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.Parent = frame
+
+        local toggleBtn = Instance.new("TextButton")
+        toggleBtn.Size = UDim2.new(0, 30, 0, 16)
+        toggleBtn.Position = UDim2.new(1, -30, 0.5, -8)
+        toggleBtn.BackgroundColor3 = Library.Theme.ElementBg
+        toggleBtn.Text = ""
+        toggleBtn.BorderSizePixel = 0
+        toggleBtn.Parent = frame
+        applyRounded(toggleBtn, 8)
+
+        local knob = Instance.new("Frame")
+        knob.Size = UDim2.new(0, 14, 0, 14)
+        knob.Position = UDim2.new(0, 1, 0.5, -7)
+        knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        knob.BorderSizePixel = 0
+        knob.Parent = toggleBtn
+        applyRounded(knob, 7)
+
+        local enabled = config.Default or false
+        local function setState(state)
+            enabled = state
+            local pos = state and UDim2.new(1, -15, 0.5, -7) or UDim2.new(0, 1, 0.5, -7)
+            knob:TweenPosition(pos, Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.2, true)
+            toggleBtn.BackgroundColor3 = state and Library.Theme.Accent or Library.Theme.ElementBg
+            if config.Callback then
+                config.Callback(state)
+            end
+            windowObj.Flags[config.Flag or config.Name] = state
+        end
+        setState(enabled)
+
+        toggleBtn.MouseButton1Click:Connect(function()
+            setState(not enabled)
+        end)
+    end
+
+    function windowObj:CopyButton(config)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, -20, 0, 45)
+        frame.BackgroundTransparency = 1
+        frame.Parent = content
+
+        local label = Instance.new("TextLabel")
+        label.Text = config.Name or "Copy Text"
+        label.Size = UDim2.new(1, -80, 0, 20)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Library.Theme.Text
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.Parent = frame
+
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0, 60, 0, 25)
+        btn.Position = UDim2.new(1, -60, 0, 0)
+        btn.Text = "Copy"
+        btn.BackgroundColor3 = Library.Theme.Accent
+        btn.TextColor3 = Library.Theme.Text
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 12
+        btn.BorderSizePixel = 0
+        btn.Parent = frame
+        applyRounded(btn, 4)
+
+        local textToCopy = config.Text or ""
+        btn.MouseButton1Click:Connect(function()
+            pcall(function()
+                setclipboard(textToCopy)
+                Library:Notify({Title = "Copied!", Text = "Text copied to clipboard.", Duration = 2})
+            end)
+        end)
+    end
+
+    function windowObj:Keybind(config)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, -20, 0, 35)
+        frame.BackgroundTransparency = 1
+        frame.Parent = content
+
+        local label = Instance.new("TextLabel")
+        label.Text = config.Name or "Keybind"
+        label.Size = UDim2.new(1, -100, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Library.Theme.Text
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.Parent = frame
+
+        local keyBtn = Instance.new("TextButton")
+        keyBtn.Size = UDim2.new(0, 80, 0, 25)
+        keyBtn.Position = UDim2.new(1, -80, 0.5, -12)
+        keyBtn.Text = config.Default or "None"
+        keyBtn.BackgroundColor3 = Library.Theme.ElementBg
+        keyBtn.TextColor3 = Library.Theme.Text
+        keyBtn.Font = Enum.Font.GothamBold
+        keyBtn.TextSize = 12
+        keyBtn.BorderSizePixel = 0
+        keyBtn.Parent = frame
+        applyRounded(keyBtn, 4)
+
+        local currentKey = config.Default
+        local listening = false
+        local connection
+
+        keyBtn.MouseButton1Click:Connect(function()
+            listening = true
+            keyBtn.Text = "..."
+            if connection then connection:Disconnect() end
+            connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+                if not listening or gameProcessed then return end
+                if input.UserInputType == Enum.UserInputType.Keyboard then
+                    currentKey = input.KeyCode.Name
+                elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    currentKey = "LeftClick"
+                elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+                    currentKey = "RightClick"
+                else
+                    return
+                end
+                keyBtn.Text = currentKey
+                listening = false
+                connection:Disconnect()
+                if config.Callback then
+                    config.Callback(currentKey)
+                end
+                windowObj.Flags[config.Flag or config.Name] = currentKey
+            end)
+        end)
+
+        -- Actual keybind execution
+        local execConn
+        local function updateExecution()
+            if execConn then execConn:Disconnect() end
+            execConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+                if gameProcessed then return end
+                local match = false
+                if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name == currentKey then
+                    match = true
+                elseif input.UserInputType == Enum.UserInputType.MouseButton1 and currentKey == "LeftClick" then
+                    match = true
+                elseif input.UserInputType == Enum.UserInputType.MouseButton2 and currentKey == "RightClick" then
+                    match = true
+                end
+                if match and config.Callback then
+                    config.Callback()
+                end
+            end)
+        end
+        updateExecution()
+        windowObj.Connections[config.Name] = execConn
+    end
+
+    function windowObj:ColorPicker(config)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, -20, 0, 90)
+        frame.BackgroundTransparency = 1
+        frame.Parent = content
+
+        local label = Instance.new("TextLabel")
+        label.Text = config.Name or "Color Picker"
+        label.Size = UDim2.new(1, 0, 0, 20)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Library.Theme.Text
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.Parent = frame
+
+        -- Color display box
+        local display = Instance.new("Frame")
+        display.Size = UDim2.new(0, 40, 0, 40)
+        display.Position = UDim2.new(0, 0, 0, 25)
+        display.BackgroundColor3 = config.Default or Color3.fromRGB(255, 0, 0)
+        display.BorderSizePixel = 0
+        display.Parent = frame
+        applyRounded(display, 4)
+
+        -- RGB sliders
+        local function createRGBSlider(component, yPos)
+            local sliderFrame = Instance.new("Frame")
+            sliderFrame.Size = UDim2.new(1, -50, 0, 8)
+            sliderFrame.Position = UDim2.new(0, 50, 0, yPos)
+            sliderFrame.BackgroundColor3 = Library.Theme.ElementBg
+            sliderFrame.BorderSizePixel = 0
+            sliderFrame.Parent = frame
+            applyRounded(sliderFrame, 4)
+
+            local fill = Instance.new("Frame")
+            fill.Size = UDim2.new(0, 0, 1, 0)
+            fill.BackgroundColor3 = component == "R" and Color3.fromRGB(255,0,0) or
+                                  (component == "G" and Color3.fromRGB(0,255,0) or Color3.fromRGB(0,0,255))
+            fill.BorderSizePixel = 0
+            fill.Parent = sliderFrame
+            applyRounded(fill, 4)
+
+            local knob = Instance.new("TextButton")
+            knob.Size = UDim2.new(0, 12, 0, 12)
+            knob.Position = UDim2.new(0, -6, 0.5, -6)
+            knob.BackgroundColor3 = Color3.fromRGB(255,255,255)
+            knob.Text = ""
+            knob.BorderSizePixel = 0
+            knob.Parent = sliderFrame
+            applyRounded(knob, 6)
+
+            return sliderFrame, fill, knob
+        end
+
+        local rSlider, rFill, rKnob = createRGBSlider("R", 25)
+        local gSlider, gFill, gKnob = createRGBSlider("G", 40)
+        local bSlider, bFill, bKnob = createRGBSlider("B", 55)
+
+        local currentColor = config.Default or Color3.fromRGB(255, 0, 0)
+
+        local function updateColor()
+            display.BackgroundColor3 = currentColor
+            rFill.Size = UDim2.new(currentColor.R, 0, 1, 0)
+            gFill.Size = UDim2.new(currentColor.G, 0, 1, 0)
+            bFill.Size = UDim2.new(currentColor.B, 0, 1, 0)
+            if config.Callback then
+                config.Callback(currentColor)
+            end
+            windowObj.Flags[config.Flag or config.Name] = currentColor
+        end
+
+        local function sliderDrag(slider, fill, knob, setFunc)
+            local dragging = false
+            knob.MouseButton1Down:Connect(function() dragging = true end)
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+            end)
+            UserInputService.InputChanged:Connect(function(input)
+                if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                    local mousePos = UserInputService:GetMouseLocation()
+                    local relPos = mousePos - slider.AbsolutePosition
+                    local percent = math.clamp(relPos.X / slider.AbsoluteSize.X, 0, 1)
+                    setFunc(percent)
+                end
+            end)
+        end
+
+        sliderDrag(rSlider, rFill, rKnob, function(percent)
+            currentColor = Color3.new(percent, currentColor.G, currentColor.B)
+            updateColor()
+        end)
+        sliderDrag(gSlider, gFill, gKnob, function(percent)
+            currentColor = Color3.new(currentColor.R, percent, currentColor.B)
+            updateColor()
+        end)
+        sliderDrag(bSlider, bFill, bKnob, function(percent)
+            currentColor = Color3.new(currentColor.R, currentColor.G, percent)
+            updateColor()
+        end)
+
+        updateColor()
+    end
+
+    function windowObj:Dropdown(config)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, -20, 0, 40)
+        frame.BackgroundTransparency = 1
+        frame.Parent = content
+
+        local label = Instance.new("TextLabel")
+        label.Text = config.Name or "Dropdown"
+        label.Size = UDim2.new(1, 0, 0, 20)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Library.Theme.Text
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.Parent = frame
+
+        local mainBtn = Instance.new("TextButton")
+        mainBtn.Size = UDim2.new(1, 0, 0, 25)
+        mainBtn.Position = UDim2.new(0, 0, 0, 20)
+        mainBtn.Text = config.Default or "Select..."
+        mainBtn.BackgroundColor3 = Library.Theme.ElementBg
+        mainBtn.TextColor3 = Library.Theme.Text
+        mainBtn.Font = Enum.Font.Gotham
+        mainBtn.TextSize = 14
+        mainBtn.TextXAlignment = Enum.TextXAlignment.Left
+        mainBtn.BorderSizePixel = 0
+        mainBtn.Parent = frame
+        applyRounded(mainBtn, 4)
+
+        local arrow = Instance.new("TextLabel")
+        arrow.Text = "▼"
+        arrow.Size = UDim2.new(0, 20, 1, 0)
+        arrow.Position = UDim2.new(1, -20, 0, 0)
+        arrow.BackgroundTransparency = 1
+        arrow.TextColor3 = Library.Theme.Text
+        arrow.Font = Enum.Font.Gotham
+        arrow.TextSize = 12
+        arrow.Parent = mainBtn
+
+        local options = config.Options or {}
+        local dropFrame = Instance.new("Frame")
+        dropFrame.Size = UDim2.new(1, 0, 0, #options * 25)
+        dropFrame.Position = UDim2.new(0, 0, 1, 2)
+        dropFrame.BackgroundColor3 = Library.Theme.ElementBg
+        dropFrame.BorderSizePixel = 0
+        dropFrame.Visible = false
+        dropFrame.ZIndex = 10
+        dropFrame.Parent = mainBtn
+        applyRounded(dropFrame, 4)
+
+        local selected = config.Default
+        local function setSelected(opt)
+            selected = opt
+            mainBtn.Text = opt
+            dropFrame.Visible = false
+            if config.Callback then
+                config.Callback(opt)
+            end
+            windowObj.Flags[config.Flag or config.Name] = opt
+        end
+
+        for i, opt in ipairs(options) do
+            local optBtn = Instance.new("TextButton")
+            optBtn.Size = UDim2.new(1, 0, 0, 25)
+            optBtn.Position = UDim2.new(0, 0, 0, (i-1)*25)
+            optBtn.Text = opt
+            optBtn.BackgroundColor3 = Library.Theme.ElementBg
+            optBtn.TextColor3 = Library.Theme.Text
+            optBtn.Font = Enum.Font.Gotham
+            optBtn.TextSize = 14
+            optBtn.TextXAlignment = Enum.TextXAlignment.Left
+            optBtn.BorderSizePixel = 0
+            optBtn.ZIndex = 11
+            optBtn.Parent = dropFrame
+            optBtn.MouseButton1Click:Connect(function()
+                setSelected(opt)
+            end)
+        end
+
+        mainBtn.MouseButton1Click:Connect(function()
+            dropFrame.Visible = not dropFrame.Visible
+            frame.Size = UDim2.new(1, -20, 0, dropFrame.Visible and 40 + dropFrame.AbsoluteSize.Y + 5 or 40)
+            content.CanvasSize = UDim2.new(0,0,0,content.AbsoluteCanvasSize.Y)
+        end)
+
+        -- Close dropdown when clicking elsewhere
+        UserInputService.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                local pos = UserInputService:GetMouseLocation()
+                if dropFrame.Visible and not (mainBtn.AbsolutePosition.X <= pos.X and pos.X <= mainBtn.AbsolutePosition.X + mainBtn.AbsoluteSize.X and
+                    mainBtn.AbsolutePosition.Y <= pos.Y and pos.Y <= mainBtn.AbsolutePosition.Y + mainBtn.AbsoluteSize.Y + dropFrame.AbsoluteSize.Y) then
+                    dropFrame.Visible = false
+                    frame.Size = UDim2.new(1, -20, 0, 40)
+                end
+            end
+        end)
+    end
+
+    return windowObj
+end
+
+return Library
